@@ -543,7 +543,29 @@ def get_prefix_length(prompt: mx.array, cached_prompt: mx.array) -> int:
 
     equal = mx.equal(prompt[:n], cached_prompt[:n]).astype(mx.int32)
     prefix_mask = mx.cumprod(equal)  # stays 1 until first mismatch, then 0 forever
-    return int(mx.sum(prefix_mask).item())
+    prefix_len = int(mx.sum(prefix_mask).item())
+
+    # Diagnostic: log divergence point when cache hit is low
+    prompt_len = int(prompt.shape[0])
+    hit_ratio = prefix_len / prompt_len if prompt_len > 0 else 1.0
+    if prefix_len > 0 and hit_ratio < 0.7 and prefix_len < n:
+        try:
+            div_pos = prefix_len
+            ctx = 3  # tokens of context around divergence
+            start = max(0, div_pos - ctx)
+            end = min(n, div_pos + ctx + 1)
+            prompt_ctx = prompt[start:end].tolist()
+            cached_ctx = cached_prompt[start:end].tolist()
+            logger.info(
+                f"KV prefix diverges at token {div_pos}/{prompt_len} (hit {hit_ratio * 100:.1f}%), "
+                f"prompt_len={prompt_len} cached_len={int(cached_prompt.shape[0])}, "
+                f"prompt_tokens[{start}:{end}]={prompt_ctx}, "
+                f"cached_tokens[{start}:{end}]={cached_ctx}"
+            )
+        except Exception:
+            pass
+
+    return prefix_len
 
 
 def get_available_memory() -> Memory:
