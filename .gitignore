@@ -39,5 +39,6 @@ bench/**/*.json
 tmp/models
 /build/exo
 /.claude/skills
+.venv
 /.claude
 /.codex
