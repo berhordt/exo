@@ -369,6 +369,7 @@ class ExoBatchGenerator:
                     f"[bench] uid={response.uid} tok#{state.completion_tokens} {text!r} t={delta:.4f}s"
                 )
             state.generated_text_parts.append(text)
+            logger.info(f"token[{state.completion_tokens}] id={response.token} {repr(text)}")
             state.potential_stop_sequence_text += text
 
             finish_reason: FinishReason | None = cast(

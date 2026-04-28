@@ -808,6 +808,7 @@ def mlx_generate(
         if on_generation_token is not None:
             on_generation_token()
 
+        logger.info(f"token[{completion_tokens}] id={out.token} {repr(text)}")
         yield GenerationResponse(
             text=text,
             token=out.token,
