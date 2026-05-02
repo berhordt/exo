@@ -310,8 +310,9 @@ def prefill(
     def progress_callback(processed: int, total: int) -> None:
         elapsed = time.perf_counter() - start_time
         tok_per_sec = processed / elapsed if elapsed > 0 else 0
-        logger.debug(
-            f"Prefill progress: {processed}/{total} tokens ({tok_per_sec:.1f} tok/s)"
+        pct = round(processed / total * 100) if total > 0 else 0
+        logger.info(
+            f"Prefill progress: {processed}/{total} tokens ({pct}%, {tok_per_sec:.1f} tok/s)"
         )
         if has_ssm:
             snapshots.append(snapshot_ssm_states(cache))
