@@ -6,6 +6,7 @@ from loguru import logger
 
 from exo.shared.models.model_cards import ModelCard
 from exo.shared.types.common import ModelId, NodeId
+from exo.shared.types.profiling import KVCacheStats as KVCacheStatsType
 from exo.shared.types.events import (
     ChunkGenerated,
     CustomModelCardAdded,
@@ -18,6 +19,7 @@ from exo.shared.types.events import (
     InstanceLinkCreated,
     InstanceLinkDeleted,
     NodeDownloadProgress,
+    KVCacheStatsEvent,
     NodeGatheredInfo,
     NodeTimedOut,
     RunnerStatusUpdated,
@@ -124,6 +126,8 @@ def event_apply(event: Event, state: State) -> State:
             return apply_instance_link_created(event, state)
         case InstanceLinkDeleted():
             return apply_instance_link_deleted(event, state)
+        case KVCacheStatsEvent():
+            return apply_kv_cache_stats_event(event, state)
 
 
 def apply(state: State, event: IndexedEvent) -> State:
@@ -346,6 +350,10 @@ def apply_node_timed_out(event: NodeTimedOut, state: State) -> State:
             "thunderbolt_bridge_cycles": thunderbolt_bridge_cycles,
         }
     )
+
+
+def apply_kv_cache_stats_event(event: KVCacheStatsEvent, state: State) -> State:
+    return state.model_copy(update={"node_kv_cache": {**state.node_kv_cache, event.node_id: event.kv_cache_stats}})
 
 
 def apply_node_gathered_info(event: NodeGatheredInfo, state: State) -> State:

@@ -341,6 +341,12 @@ class Runner:
         while self.active_tasks:
             results = self.generator.step()
 
+            # Publish KV cache stats every 10 steps
+            if hasattr(self.generator, 'kv_prefix_cache') and self.generator.kv_prefix_cache is not None:
+                self._kv_stats_counter = getattr(self, '_kv_stats_counter', 0) + 1
+                if self._kv_stats_counter % 10 == 0:
+                    self._publish_kv_cache_stats()
+
             finished: list[TaskId] = []
             for task_id, result in results:
                 match result:

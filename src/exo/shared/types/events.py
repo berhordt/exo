@@ -8,6 +8,8 @@ from exo.shared.topology import Connection
 from exo.shared.types.chunks import Chunk, InputImageChunk
 from exo.shared.types.common import CommandId, Id, ModelId, NodeId, SessionId, SystemId
 from exo.shared.types.instance_link import InstanceLink, InstanceLinkId
+from exo.shared.types.common import NodeId
+from exo.shared.types.profiling import KVCacheStats
 from exo.shared.types.tasks import Task, TaskId, TaskStatus
 from exo.shared.types.worker.downloads import DownloadProgress
 from exo.shared.types.worker.instances import Instance, InstanceId
@@ -90,6 +92,11 @@ class NodeDownloadProgress(BaseEvent):
     download_progress: DownloadProgress
 
 
+class KVCacheStatsEvent(BaseEvent):
+    node_id: NodeId
+    kv_cache_stats: KVCacheStats
+
+
 class ChunkGenerated(BaseEvent):
     command_id: CommandId
     chunk: Chunk
@@ -159,6 +166,7 @@ Event = (
     | NodeTimedOut
     | NodeGatheredInfo
     | NodeDownloadProgress
+    | KVCacheStatsEvent
     | ChunkGenerated
     | InputChunkReceived
     | TopologyEdgeCreated

@@ -17,7 +17,6 @@ from exo.shared.constants import EXO_CONFIG_FILE, EXO_DEFAULT_MODELS_DIR
 from exo.shared.types.backends import Backend
 from exo.shared.types.memory import Memory
 from exo.shared.types.profiling import (
-    KVCacheStats,
     DiskUsage,
     MemoryUsage,
     NetworkInterfaceInfo,
@@ -397,7 +396,6 @@ GatheredInfo = (
     | StaticNodeInformation
     | NodeDiskUsage
     | NodeBackends
-    | KVCacheStats
 )
 
 
@@ -456,7 +454,6 @@ class InfoGatherer:
             tg.start_soon(self._monitor_misc, 60)
             tg.start_soon(self._monitor_static_info, 60)
             tg.start_soon(self._monitor_disk_usage, 30)
-            tg.start_soon(self._monitor_kv_cache, 30)
 
             nc = await NodeConfig.gather()
             if nc is not None:
@@ -637,16 +634,3 @@ class InfoGatherer:
                 logger.opt(exception=e).warning("Error in macmon monitor")
                 self._tg.start_soon(self._monitor_memory_usage, 1)
             await anyio.sleep(macmon_interval)
-
-    async def _monitor_kv_cache(self, kv_poll_interval: float):
-        """Poll KV cache stats from the shared store (written by MLX runner)."""
-        from exo.worker.kv_cache_stats import get_kv_cache_stats
-
-        while True:
-            try:
-                stats = get_kv_cache_stats()
-                if stats is not None:
-                    await self.info_sender.send(stats)
-            except Exception as e:
-                logger.opt(exception=e).warning("Error gathering KV cache stats")
-            await anyio.sleep(kv_poll_interval)
