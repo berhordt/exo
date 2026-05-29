@@ -19,8 +19,9 @@ from exo.shared.types.commands import (
     StartDownload,
 )
 from exo.shared.types.common import CommandId, NodeId, SystemId
-from exo.shared.types.events import KVCacheCleared, (
+from exo.shared.types.events import (
     Event,
+    KVCacheCleared,
     IndexedEvent,
     InputChunkReceived,
     InstanceDeleted,

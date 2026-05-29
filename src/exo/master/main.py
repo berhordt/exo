@@ -13,8 +13,9 @@ from exo.master.placement import (
 from exo.master.placement_utils import find_ip_prioritised
 from exo.shared.apply import apply
 from exo.shared.constants import EXO_EVENT_LOG_DIR, EXO_TRACING_ENABLED
-from exo.shared.types.commands import ClearKVCache, (
+from exo.shared.types.commands import (
     AddCustomModelCard,
+    ClearKVCache,
     CreateInstance,
     DeleteCustomModelCard,
     DeleteInstance,
@@ -33,7 +34,8 @@ from exo.shared.types.commands import ClearKVCache, (
     TextGeneration,
 )
 from exo.shared.types.common import CommandId, NodeId, SessionId, SystemId
-from exo.shared.types.events import KVCacheCleared, (
+from exo.shared.types.events import (
+    KVCacheCleared,
     CustomModelCardAdded,
     CustomModelCardDeleted,
     Event,
