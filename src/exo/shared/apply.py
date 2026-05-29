@@ -8,6 +8,7 @@ from exo.shared.models.model_cards import ModelCard
 from exo.shared.types.common import ModelId, NodeId
 from exo.shared.types.profiling import KVCacheStats as KVCacheStatsType
 from exo.shared.types.events import (
+    KVCacheCleared,
     ChunkGenerated,
     CustomModelCardAdded,
     CustomModelCardDeleted,
@@ -128,6 +129,8 @@ def event_apply(event: Event, state: State) -> State:
             return apply_instance_link_deleted(event, state)
         case KVCacheStatsEvent():
             return apply_kv_cache_stats_event(event, state)
+        case KVCacheCleared():
+            return state.model_copy(update={"node_kv_cache": {}})
 
 
 def apply(state: State, event: IndexedEvent) -> State:
