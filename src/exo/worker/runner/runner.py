@@ -344,7 +344,7 @@ class Runner:
             # Publish KV cache stats every 10 steps
             if hasattr(self.generator, 'kv_prefix_cache') and self.generator.kv_prefix_cache is not None:
                 self._kv_stats_counter = getattr(self, '_kv_stats_counter', 0) + 1
-                if self._kv_stats_counter % 10 == 0:
+                if self._kv_stats_counter % 1 == 0:
                     self._publish_kv_cache_stats()
 
             finished: list[TaskId] = []
@@ -393,6 +393,7 @@ class Runner:
 
 
     def _publish_kv_cache_stats(self):
+        logger.info("KV stats: publishing...")
         """Send KV cache stats to the master via event channel."""
         try:
             cache = self.generator.kv_prefix_cache
