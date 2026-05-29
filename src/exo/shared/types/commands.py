@@ -82,6 +82,11 @@ class DeleteInstanceLink(BaseCommand):
 
 DownloadCommand = StartDownload | DeleteDownload | CancelDownload
 
+class ClearKVCache(BaseCommand):
+    """Command to clear the KV prefix cache on all runners."""
+    pass
+
+
 Command = (
     TestCommand
     | RequestEventLog
@@ -100,10 +105,6 @@ Command = (
     | DeleteInstanceLink
     | ClearKVCache
 )
-
-class ClearKVCache(BaseCommand):
-    """Command to clear the KV prefix cache on all runners."""
-    pass
 
 class ForwarderCommand(FrozenModel):
     origin: SystemId
