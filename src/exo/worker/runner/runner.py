@@ -391,6 +391,35 @@ class Runner:
 
         return ExitCode.AllTasksComplete
 
+
+    def _publish_kv_cache_stats(self):
+        """Send KV cache stats to the master via event channel."""
+        try:
+            cache = self.generator.kv_prefix_cache
+            from exo.shared.types.events import KVCacheStatsEvent
+            from exo.shared.types.profiling import KVCacheStats, KVCacheEntry
+            entries = [
+                KVCacheEntry(
+                    token_count=len(p),
+                    prefill_tps=cache.prefill_tps[i] if i < len(cache.prefill_tps) else 0.0,
+                    last_used_counter=cache._last_used[i] if i < len(cache._last_used) else 0,
+                )
+                for i, p in enumerate(cache.prompts)
+            ]
+            stats = KVCacheStats(
+                entry_count=len(cache.prompts),
+                total_tokens=sum(len(p) for p in cache.prompts) if cache.prompts else 0,
+                avg_prefill_tps=(sum(cache.prefill_tps) / len(cache.prefill_tps) if cache.prefill_tps else 0.0),
+                memory_used_pct=cache.get_memory_used_percentage(),
+                entries=entries,
+            )
+            self.event_sender.send(KVCacheStatsEvent(
+                node_id=self.bound_instance.bound_node_id,
+                kv_cache_stats=stats,
+            ))
+        except Exception:
+            pass  # never let stats publishing break inference
+
     def send_chunk(
         self,
         chunk: Chunk,
