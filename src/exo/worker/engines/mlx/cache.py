@@ -601,3 +601,25 @@ def make_kv_cache(
     else:
         logger.info(f"Using rotating KV cache with {max_kv_size=} with {keep=}")
         return [RotatingKVCache(max_size=max_kv_size, keep=keep) for _ in model.layers]
+
+
+def kv_cache_stats(cache: KVPrefixCache) -> dict:
+    """Extract stats from KVPrefixCache for monitoring. Thread-safe read."""
+    return {
+        "entry_count": len(cache.prompts),
+        "total_tokens": sum(len(p) for p in cache.prompts) if cache.prompts else 0,
+        "avg_prefill_tps": (
+            sum(cache.prefill_tps) / len(cache.prefill_tps)
+            if cache.prefill_tps
+            else 0.0
+        ),
+        "memory_used_pct": cache.get_memory_used_percentage(),
+        "entries": [
+            {
+                "token_count": len(p),
+                "prefill_tps": cache.prefill_tps[i] if i < len(cache.prefill_tps) else 0.0,
+                "last_used_counter": cache._last_used[i] if i < len(cache._last_used) else 0,
+            }
+            for i, p in enumerate(cache.prompts)
+        ],
+    }

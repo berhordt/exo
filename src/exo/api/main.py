@@ -183,6 +183,7 @@ from exo.shared.types.events import (
 from exo.shared.types.instance_link import InstanceLink, InstanceLinkId
 from exo.shared.types.memory import Memory
 from exo.shared.types.state import State
+
 from exo.shared.types.tasks import (
     ImageEdits as ImageEditsTask,
 )
@@ -422,6 +423,10 @@ class API:
                 status_code=404,
                 detail=f"unable to find path '{path.replace('/', '.')}' in state json",
             ) from e
+
+    def get_kv_cache(self):
+        """Return KV cache stats for all nodes."""
+        return self.state.node_kv_cache
 
     async def place_instance(self, payload: PlaceInstanceParams):
         command = PlaceInstance(

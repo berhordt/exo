@@ -39,6 +39,7 @@ from exo.shared.types.profiling import (
     NodeRdmaCtlStatus,
     NodeThunderboltInfo,
     ThunderboltBridgeStatus,
+    KVCacheStats,
 )
 from exo.shared.types.state import State
 from exo.shared.types.tasks import Task, TaskId, TaskStatus
@@ -370,6 +371,8 @@ def apply_node_gathered_info(event: NodeGatheredInfo, state: State) -> State:
             update["node_memory"] = {**state.node_memory, event.node_id: info.memory}
         case MemoryUsage():
             update["node_memory"] = {**state.node_memory, event.node_id: info}
+        case KVCacheStats():
+            update["node_kv_cache"] = {**state.node_kv_cache, event.node_id: info}
         case NodeDiskUsage():
             update["node_disk"] = {**state.node_disk, event.node_id: info.disk_usage}
         case NodeConfig():

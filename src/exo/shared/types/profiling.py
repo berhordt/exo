@@ -109,3 +109,21 @@ class ThunderboltBridgeStatus(FrozenModel):
     enabled: bool
     exists: bool
     service_name: str | None = None
+
+
+class KVCacheEntry(FrozenModel):
+    """Single KV cache entry summary."""
+
+    token_count: int
+    prefill_tps: float = 0.0
+    last_used_counter: int = 0
+
+
+class KVCacheStats(FrozenModel):
+    """KV cache statistics for a node."""
+
+    entry_count: int = 0
+    total_tokens: int = 0
+    avg_prefill_tps: float = 0.0
+    memory_used_pct: float = 0.0
+    entries: list[KVCacheEntry] = []
