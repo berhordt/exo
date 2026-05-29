@@ -19,7 +19,7 @@ from exo.shared.types.commands import (
     StartDownload,
 )
 from exo.shared.types.common import CommandId, NodeId, SystemId
-from exo.shared.types.events import (
+from exo.shared.types.events import KVCacheCleared, (
     Event,
     IndexedEvent,
     InputChunkReceived,
@@ -48,7 +48,7 @@ from exo.shared.types.text_generation import Base64Image, Base64ImageHash
 from exo.shared.types.topology import Connection, SocketConnection
 from exo.shared.types.worker.downloads import DownloadCompleted
 from exo.shared.types.worker.instances import InstanceId
-from exo.shared.types.worker.runners import RunnerId
+from exo.shared.types.worker.runners import RunnerId, RunnerShuttingDown, RunnerShutdown
 from exo.utils.channels import Receiver, Sender, channel
 from exo.utils.info_gatherer.info_gatherer import GatheredInfo, InfoGatherer
 from exo.utils.info_gatherer.net_profile import check_reachable
@@ -140,6 +140,15 @@ class Worker:
 
                 if isinstance(event, InstanceDeleted):
                     self._instance_backoff.reset(event.instance_id)
+
+                # Clear KV cache on all runners
+                if isinstance(event, KVCacheCleared):
+                    for runner in self.runners.values():
+                        if hasattr(runner, 'generator') and hasattr(runner.generator, 'kv_prefix_cache') and runner.generator.kv_prefix_cache is not None:
+                            runner.generator.kv_prefix_cache.clear()
+                            logger.info('KV cache cleared on runner')
+                    # Reset stats
+                    self.state = self.state.model_copy(update={'node_kv_cache': {}})
 
                 # Buffer input image chunks for image editing
                 if isinstance(event, InputChunkReceived):

@@ -301,6 +301,12 @@ class Runner:
                 if return_code == ExitCode.Shutdown:
                     return
 
+            case ClearKVCacheTask():
+                if hasattr(self.generator, "kv_prefix_cache") and self.generator.kv_prefix_cache is not None:
+                    self.generator.kv_prefix_cache.clear()
+                    logger.info("KV cache cleared")
+                self.acknowledge_task(task)
+
             case Shutdown():
                 self.shutdown(task)
                 return

@@ -395,6 +395,7 @@ class API:
         self.app.get("/state")(self.get_state)
         self.app.get("/state/{path:path}")(self.get_state)
         self.app.get("/v1/kv-cache")(self.get_kv_cache)
+        self.app.post("/v1/kv-cache/clear")(self.clear_kv_cache)
         self.app.get("/events")(self.stream_events)
         self.app.post("/download/start")(self.start_download)
         self.app.delete("/download/{node_id}/{model_id:path}")(self.delete_download)
@@ -428,6 +429,16 @@ class API:
     def get_kv_cache(self):
         """Return KV cache stats for all nodes."""
         return self.state.node_kv_cache
+
+    async def clear_kv_cache(self):
+        """Clear KV cache on all nodes."""
+        from exo.shared.types.commands import ClearKVCache
+        from exo.shared.types.common import CommandId
+        command = ClearKVCache(command_id=CommandId())
+        await self.command_sender.send(
+            ForwarderCommand(origin=self._system_id, command=command)
+        )
+        return {"status": "ok", "message": "KV cache clear command sent"}
 
     async def place_instance(self, payload: PlaceInstanceParams):
         command = PlaceInstance(

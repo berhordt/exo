@@ -153,6 +153,10 @@ class InstanceLinkDeleted(BaseEvent):
     link_id: InstanceLinkId
 
 
+class KVCacheCleared(BaseEvent):
+    pass
+
+
 Event = (
     TestEvent
     | TaskCreated
@@ -177,6 +181,7 @@ Event = (
     | CustomModelCardDeleted
     | InstanceLinkCreated
     | InstanceLinkDeleted
+    | KVCacheCleared
 )
 
 

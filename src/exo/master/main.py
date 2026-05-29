@@ -13,7 +13,7 @@ from exo.master.placement import (
 from exo.master.placement_utils import find_ip_prioritised
 from exo.shared.apply import apply
 from exo.shared.constants import EXO_EVENT_LOG_DIR, EXO_TRACING_ENABLED
-from exo.shared.types.commands import (
+from exo.shared.types.commands import ClearKVCache, (
     AddCustomModelCard,
     CreateInstance,
     DeleteCustomModelCard,
@@ -33,7 +33,7 @@ from exo.shared.types.commands import (
     TextGeneration,
 )
 from exo.shared.types.common import CommandId, NodeId, SessionId, SystemId
-from exo.shared.types.events import (
+from exo.shared.types.events import KVCacheCleared, (
     CustomModelCardAdded,
     CustomModelCardDeleted,
     Event,
@@ -440,6 +440,8 @@ class Master:
                             generated_events.append(
                                 InstanceLinkDeleted(link_id=command.link_id)
                             )
+                        case ClearKVCache():
+                            generated_events.append(KVCacheCleared())
                         case RequestEventLog():
                             # We should just be able to send everything, since other buffers will ignore old messages
                             # rate limit to 1000 at a time

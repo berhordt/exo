@@ -85,6 +85,10 @@ class ImageEdits(BaseTask):  # emitted by Master
     error_message: str | None = Field(default=None)
 
 
+class ClearKVCacheTask(BaseTask):  # emitted by Worker
+    pass
+
+
 class Shutdown(BaseTask):  # emitted by Worker
     runner_id: RunnerId
 
@@ -99,6 +103,7 @@ Task = (
     | CancelTask
     | ImageGeneration
     | ImageEdits
+    | ClearKVCacheTask
     | Shutdown
 )
 TextTask = TextGeneration
