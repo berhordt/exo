@@ -1,3 +1,4 @@
+from exo.worker.kv_cache_stats import publish_kv_stats
 import itertools
 import time
 from collections import deque
@@ -208,6 +209,10 @@ class SequentialGenerator(Engine):
                 map(lambda task: (task, CancelledResponse()), self._cancelled_tasks),
             ),
         )
+
+        # Publish KV cache stats (runs in runner thread, safe)
+        if self.kv_prefix_cache is not None:
+            publish_kv_stats(self.kv_prefix_cache)
 
     def _start_next(self) -> None:
         task = self._queue.popleft()
@@ -464,6 +469,10 @@ class BatchGenerator(Engine):
             ),
             itertools.chain(output, self._apply_cancellations()),
         )
+
+        # Publish KV cache stats (runs in runner thread, safe)
+        if self.kv_prefix_cache is not None:
+            publish_kv_stats(self.kv_prefix_cache)
 
     def _apply_cancellations(
         self,
