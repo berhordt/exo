@@ -18,6 +18,7 @@ from exo.shared.types.events import (
     TaskStatusUpdated,
 )
 from exo.shared.types.tasks import (
+    ClearKVCacheTask,
     ConnectToGroup,
     GenerationTask,
     ImageEdits,
