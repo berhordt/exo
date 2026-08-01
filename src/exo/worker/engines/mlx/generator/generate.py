@@ -1,6 +1,7 @@
 import contextlib
 import functools
 import math
+import os
 import time
 import uuid
 from typing import Callable, Generator, cast, get_args
@@ -77,6 +78,176 @@ REMOTE_PREFILL_MIN_TOKENS = 1000
 generation_stream = mx.new_stream(mx.default_device())
 
 _MIN_PREFIX_HIT_RATIO_TO_UPDATE = 0.5
+
+
+# Diagnostic instrumentation for the GLM-5.2 DSA long-context token-0 loop.
+# Everything here is gated behind GLM_DSA_TRACE=1 and is a no-op otherwise.
+_GLM_DSA_TRACE = os.environ.get("GLM_DSA_TRACE") is not None
+
+
+def _dsa_trace_enabled() -> bool:
+    return _GLM_DSA_TRACE
+
+
+def _trace_rank_tag(group: mx.distributed.Group | None) -> str:
+    if group is None:
+        return "R?/?"
+    return f"R{group.rank()}/{group.size()}"
+
+
+def _cache_offsets(c: object) -> list[tuple[str, int | None]]:
+    """Return (type_name, offset) pairs for a cache entry, descending into CacheList."""
+    try:
+        from mlx_lm.models.cache import CacheList
+    except ImportError:  # pragma: no cover
+        CacheList = ()  # type: ignore[assignment]
+
+    if isinstance(c, CacheList):
+        out: list[tuple[str, int | None]] = []
+        for sub in c.caches:  # type: ignore[attr-defined]
+            out.extend(_cache_offsets(sub))
+        return out
+    offset = getattr(c, "offset", None)
+    if isinstance(offset, mx.array):
+        offset = offset.item()  # type: ignore[assignment]
+    return [(type(c).__name__, offset)]  # type: ignore[return-value]
+
+
+def _trace_prefill_cache_state(
+    cache: KVCacheType,
+    num_tokens: int,
+    group: mx.distributed.Group | None,
+    tag: str,
+) -> None:
+    """Instrument 2: dump per-layer cache offsets after prefill.
+
+    ``num_tokens`` is the number of prompt tokens passed to prefill (N-1 of the
+    full prompt). If decode resumes from the last prompt token the cache should
+    hold N-2 tokens (offset N-2 = num_tokens - 1); the sequential path trims to
+    N-3 (offset num_tokens - 3), dropping one token. This dump makes any
+    main/indexer offset misalignment or off-by-one visible.
+    """
+    if not _dsa_trace_enabled():
+        return
+    expected = num_tokens - 1
+    layer_count = len(cache)
+    sample_idx = sorted(
+        {
+            i
+            for i in (
+                0,
+                1,
+                2,
+                layer_count // 2,
+                layer_count - 3,
+                layer_count - 2,
+                layer_count - 1,
+            )
+            if 0 <= i < layer_count
+        }
+    )
+    lines = []
+    for i in sample_idx:
+        c = cache[i]
+        if c is None:
+            lines.append(f"  layer[{i}]: None")
+            continue
+        offs = _cache_offsets(c)
+        lines.append(
+            f"  layer[{i}]: " + ", ".join(f"{t}={o}" for t, o in offs)
+        )
+    logger.info(
+        f"[GLM_DSA_TRACE {_trace_rank_tag(group)}] {tag}: "
+        f"num_tokens={num_tokens} expected_offset={expected} layers={layer_count}\n"
+        + "\n".join(lines)
+    )
+
+
+def _trace_cache_finite(
+    cache: KVCacheType,
+    group: mx.distributed.Group | None,
+    tag: str,
+) -> None:
+    """Instrument 2: NaN/Inf check on the first and last layer's KV caches."""
+    if not _dsa_trace_enabled():
+        return
+    try:
+        from mlx_lm.models.cache import CacheList
+    except ImportError:  # pragma: no cover
+        CacheList = ()  # type: ignore[assignment]
+
+    def _check(label: str, arr: object) -> str:
+        if arr is None:
+            return f"{label}=None"
+        try:
+            ok = bool(mx.isfinite(arr).all().item())  # type: ignore[arg-type]
+        except Exception as e:  # pragma: no cover
+            return f"{label}=ERR({type(e).__name__})"
+        return f"{label}=finite:{ok}"
+
+    out: list[str] = []
+    for idx in (0, len(cache) - 1):
+        c = cache[idx]
+        if c is None:
+            out.append(f"layer[{idx}]=None")
+            continue
+        subs = c.caches if isinstance(c, CacheList) else [c]  # type: ignore[attr-defined]
+        parts = []
+        for j, sub in enumerate(subs):
+            parts.append(_check(f"k{j}", getattr(sub, "keys", None)))
+            parts.append(_check(f"v{j}", getattr(sub, "values", None)))
+        out.append(f"layer[{idx}](" + ", ".join(parts) + ")")
+    logger.info(f"[GLM_DSA_TRACE {_trace_rank_tag(group)}] {tag}: " + " | ".join(out))
+
+
+def _trace_decode_token(
+    completion_tokens: int,
+    out: object,
+    group: mx.distributed.Group | None,
+) -> None:
+    """Instrument 1: first-decode token/logits diagnostics.
+
+    Distinguishes a deterministic collapse (token 0 == argmax with high
+    probability) from a sampling collapse (near-uniform logits that keep
+    sampling token 0).
+    """
+    if not _dsa_trace_enabled():
+        return
+    if completion_tokens > 5:
+        return
+    token = getattr(out, "token", None)
+    text = repr(getattr(out, "text", ""))
+    logprobs = getattr(out, "logprobs", None)
+    lp_arr = None
+    if logprobs is not None:
+        try:
+            lp_arr = mx.array(logprobs, dtype=mx.float32)
+        except Exception:  # pragma: no cover
+            lp_arr = None
+    if lp_arr is None or getattr(lp_arr, "ndim", 0) != 1:
+        logger.info(
+            f"[GLM_DSA_TRACE {_trace_rank_tag(group)}] decode[{completion_tokens}] "
+            f"token={token} {text} (no logprobs)"
+        )
+        return
+    try:
+        topk_idx = mx.argsort(lp_arr)[-5:][::-1]
+        top5_ids = topk_idx.tolist()
+        top5_lp = lp_arr[topk_idx].tolist()
+        lp0 = float(lp_arr[0].item())
+        argmax_id = int(mx.argmax(lp_arr).item())
+        entropy = -float((lp_arr * mx.exp(lp_arr)).sum().item())
+        logger.info(
+            f"[GLM_DSA_TRACE {_trace_rank_tag(group)}] decode[{completion_tokens}] "
+            f"token={token} argmax={argmax_id} lp[0]={lp0:.4f} "
+            f"top5={[(int(i), round(float(v), 4)) for i, v in zip(top5_ids, top5_lp)]} "
+            f"entropy={entropy:.3f} {text}"
+        )
+    except Exception as e:  # pragma: no cover
+        logger.info(
+            f"[GLM_DSA_TRACE {_trace_rank_tag(group)}] decode[{completion_tokens}] "
+            f"token={token} {text} logprobs_err={type(e).__name__}"
+        )
 
 
 @contextlib.contextmanager
@@ -386,6 +557,9 @@ def prefill(
         else:
             assert not non_trimmable
             c.trim(2)
+
+    _trace_prefill_cache_state(cache, num_tokens, group, "after prefill trim")
+    _trace_cache_finite(cache, group, "after prefill trim")
 
     elapsed = time.perf_counter() - start_time
     tokens_per_sec = num_tokens / elapsed if elapsed > 0 else 0.0
@@ -733,6 +907,7 @@ def mlx_generate(
         ),
         start=1,
     ):
+        _trace_decode_token(completion_tokens, out, group)
         generated_text_parts.append(out.text)
         accumulated_text += out.text
 
