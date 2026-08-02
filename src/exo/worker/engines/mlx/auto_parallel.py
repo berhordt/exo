@@ -175,15 +175,11 @@ class PipelineLastLayer(CustomMlxLayer):
                 output = mx.distributed.send(
                     output, (self.r + 1) % self.s, group=self.group
                 )
-            if cache is not None:
-                # CacheList (used by MLA models like DeepSeekV32, GLM MoE DSA)
-                # doesn't have .keys directly; access via first sub-cache.
-                _cache = cache[0] if hasattr(cache, "caches") else cache  # type: ignore
-                if hasattr(_cache, "keys"):  # pyright: ignore[reportAny]
-                    _cache.keys = mx.depends(_cache.keys, output)  # type: ignore
+            # Do NOT rebind the cache keys via mx.depends — it returns a new
+            # array with private storage, detaching the KVCache buffer and
+            # corrupting writes at long-context growth boundaries (NaN KV ->
+            # token-0 loop). mx.eval(output) below forces the send instead.
             mx.eval(output)
-            if cache is not None and hasattr(_cache, "keys"):  # type: ignore
-                mx.eval(_cache.keys)  # type: ignore
 
         if not self.is_prefill:
             output = mx.distributed.all_gather(output, group=self.group)[
@@ -411,12 +407,16 @@ def patch_pipeline_model[T](model: T, group: mx.distributed.Group) -> T:
             "cache", None
         )
 
-        # Add dependency to last cache entry to ensure distributed ops are evaluated
+        # Force the distributed ops (contained in logits) to be evaluated
+        # WITHOUT rebinding the last cache entry's keys: mx.depends returns a
+        # new array with private storage, detaching the KVCache buffer and
+        # corrupting writes at long-context growth boundaries (NaN KV ->
+        # token-0 loop).
         if cache is not None and len(cache) > 0:  # type: ignore
             last = cache[-1]  # type: ignore
             dep_cache = last[0] if hasattr(last, "caches") else last  # type: ignore
             if hasattr(dep_cache, "keys") and dep_cache.keys is not None:  # type: ignore
-                dep_cache.keys = mx.depends(dep_cache.keys, logits)  # type: ignore
+                mx.eval(logits)
 
         return logits
 
@@ -440,12 +440,16 @@ def patch_tensor_model[T](model: T) -> T:
             "cache", None
         )
 
-        # Add dependency to last cache entry to ensure distributed ops are evaluated
+        # Force the distributed ops (contained in logits) to be evaluated
+        # WITHOUT rebinding the last cache entry's keys: mx.depends returns a
+        # new array with private storage, detaching the KVCache buffer and
+        # corrupting writes at long-context growth boundaries (NaN KV ->
+        # token-0 loop).
         if cache is not None and len(cache) > 0:  # pyright: ignore[reportAny]
             last = cache[-1]  # pyright: ignore[reportAny]
             dep_cache = last[0] if hasattr(last, "caches") else last  # pyright: ignore[reportAny]
             if hasattr(dep_cache, "keys"):  # type: ignore
-                dep_cache.keys = mx.depends(dep_cache.keys, logits)  # pyright: ignore[reportAny]
+                mx.eval(logits)
 
         return logits
 
