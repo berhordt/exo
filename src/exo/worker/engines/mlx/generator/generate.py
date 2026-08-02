@@ -186,7 +186,7 @@ def _trace_cache_finite(
         return f"{label}=finite:{ok}"
 
     out: list[str] = []
-    for idx in (0, len(cache) - 1):
+    for idx in range(len(cache)):
         c = cache[idx]
         if c is None:
             out.append(f"layer[{idx}]=None")
