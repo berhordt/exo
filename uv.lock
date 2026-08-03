@@ -1309,8 +1309,8 @@ sdist = { url = "https://files.pythonhosted.org/packages/55/fa/96d4cc7ada2833571
 
 [[package]]
 name = "mlx"
-version = "0.32.0.dev20260624+39c8a03a"
-source = { git = "https://github.com/berhordt/mlx.git?branch=address-rdma-gpu-locks#39c8a03a8b6138e216c9fe3cc926ac6c452fc892" }
+version = "0.32.0.dev20260624+d3d26a2c"
+source = { git = "https://github.com/berhordt/mlx.git?branch=address-rdma-gpu-locks#d3d26a2ccc39e6308e3544f7c83cf468fd4627f9" }
 resolution-markers = [
     "sys_platform == 'darwin'",
 ]
