@@ -503,12 +503,23 @@ def prefill(
 
     is_pipeline = _has_pipeline_communication_layer(model)
 
-    # Workaround for the N=2^15 token-0 loop: the DSA attention arrays
-    # (pe_scores = L x keys) hit exactly 2^31 elements when L=4096 and
-    # keys=32768, corrupting memory on this cluster's mlx. Reducing the
-    # prefill step keeps each attention call well below 2^31 elements.
-    # Env: GLM_DSA_PREFILL_STEP (default 4096; 1024 avoids the boundary).
-    prefill_step_size = int(os.environ.get("GLM_DSA_PREFILL_STEP", "4096"))
+    # Fix for the N=2^15 token-0 loop: the DSA attention arrays
+    # (pe_scores = n_heads_per_rank * L * N) reach exactly 2^31 elements at
+    # L=4096, N=32768 with 16 heads/rank, which corrupts memory (OOB writes
+    # land in the values buffer -> +inf -> NaN -> token-0 loop). Keep
+    # n_heads * L * N < 2^31 by choosing the prefill step from the prompt
+    # length. Env override: GLM_DSA_PREFILL_STEP.
+    try:
+        n_heads = int(model.layers[0].self_attn.num_heads)  # type: ignore[union-attr]
+    except Exception:  # pragma: no cover
+        n_heads = 16
+    env_step = os.environ.get("GLM_DSA_PREFILL_STEP")
+    if env_step:
+        prefill_step_size = int(env_step)
+    else:
+        prefill_step_size = min(
+            4096, max(64, (2**31 - 1) // max(n_heads * num_tokens, 1))
+        )
 
     try:
         if is_pipeline and num_tokens >= prefill_step_size:
